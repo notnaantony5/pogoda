@@ -2,6 +2,7 @@ import asyncio
 import logging
 import sys
 from datetime import datetime
+from token import BOT_TOKEN
 
 from aiogram import Bot, Dispatcher, html
 from aiogram.client.default import DefaultBotProperties
@@ -33,7 +34,6 @@ def db_setup():
 
 engine, session_factory = db_setup()
 
-BOT_TOKEN = "7238428826:AAG1UA1h-yqC6XjEw1VgRrCBDTHMioE2FUw"
 dp = Dispatcher()
 
 
