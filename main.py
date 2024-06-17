@@ -112,6 +112,19 @@ async def handle_add_city(message: Message, state: FSMContext):
     await message.answer("Введите название города.")
 
 
+@dp.message(F.text == 'Удалить город')
+async def handle_remove_city(message: Message):
+    with session_factory() as session:
+        user = session.query(User).filter(User.tg_id == message.from_user.id).first()
+        user_citys = session.query(UserCity).filter(UserCity.user_id == user.id).all()
+        delete_keyboard = [
+            [InlineKeyboardButton(text=city.title, callback_data=city.title)
+             for city in user_citys]
+        ]
+        await message.answer(text="Выберите город для удаления!",
+                             reply_markup=InlineKeyboardMarkup(inline_keyboard=delete_keyboard))
+
+
 @dp.message(Command('remove_admin'))
 async def handle_remove_admin(message: Message):
     with session_factory() as session:
