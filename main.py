@@ -59,6 +59,15 @@ async def handle_password(message: Message, state: FSMContext):
         await message.answer("Неверный пароль!")
     await state.clear()
 
+@dp.message(Command('remove_admin'))
+async def handle_remove_admin(message: Message):
+    with session_factory() as session:
+        user = session.query(User).filter(User.tg_id == message.from_user.id).first()
+        if user:
+            if user.is_admin:
+                user.is_admin = False
+                session.commit()
+                await message.answer("Вы больше не администратор!")
 
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
