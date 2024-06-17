@@ -8,13 +8,13 @@ from aiogram.fsm.state import StatesGroup, State
 
 from token_tg import BOT_TOKEN
 
-from aiogram import Bot, Dispatcher, html
+from aiogram import Bot, Dispatcher, html, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import create_engine, ForeignKey
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship
 
 ADMIN_PASSWORD = "12431243"
 
@@ -32,6 +32,16 @@ class User(BaseORM):
     fullname: Mapped[str]
     created_at: Mapped[datetime]
     is_admin: Mapped[bool] = mapped_column(default=False)
+    citys: Mapped[list["UserCity"]] = relationship(back_populates='user')
+
+
+class UserCity(BaseORM):
+    __tablename__ = 'citys'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str]
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    user: Mapped["User"] = relationship(back_populates='citys')
 
 
 def db_setup():
@@ -50,6 +60,10 @@ dp = Dispatcher()
 
 class AdminSign(StatesGroup):
     password = State()
+
+
+class AddCityStates(StatesGroup):
+    title = State()
 
 
 menu_keyboard = [
@@ -71,6 +85,31 @@ async def handle_password(message: Message, state: FSMContext):
     else:
         await message.answer("Неверный пароль!")
     await state.clear()
+
+
+@dp.message(AddCityStates.title)
+async def handle_add_city_title(message: Message, state: FSMContext):
+    with session_factory() as session:
+        user = session.query(User).filter(User.tg_id == message.from_user.id).first()
+        if not user:
+            return
+        title = message.text.capitalize()
+        city = session.query(UserCity).filter(UserCity.user_id == user.id).filter(UserCity.title == title).first()
+        if city:
+            await message.answer("Этот город уже добавлен!")
+            await state.clear()
+            return
+        city = UserCity(user_id=user.id, title=title)
+        session.add(city)
+        session.commit()
+        await message.answer(f"Город {title} добавлен!")
+        await state.clear()
+
+
+@dp.message(F.text == 'Добавить город')
+async def handle_add_city(message: Message, state: FSMContext):
+    await state.set_state(AddCityStates.title)
+    await message.answer("Введите название города.")
 
 
 @dp.message(Command('remove_admin'))
@@ -97,7 +136,6 @@ async def command_start_handler(message: Message) -> None:
         user = User(tg_id=tg_user.id, username=tg_user.username, fullname=tg_user.full_name, created_at=datetime.now())
         session.add(user)
         session.commit()
-
 
 
 @dp.message(Command('admin'))
