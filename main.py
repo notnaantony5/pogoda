@@ -2,7 +2,7 @@ import asyncio
 import logging
 import sys
 from datetime import datetime
-from token import BOT_TOKEN
+from token_tg import BOT_TOKEN
 
 from aiogram import Bot, Dispatcher, html
 from aiogram.client.default import DefaultBotProperties
