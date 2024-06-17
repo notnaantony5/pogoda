@@ -20,13 +20,15 @@ class User(BaseORM):
     tg_id: Mapped[int] = mapped_column(unique=True, index=True)
     username: Mapped[str] = mapped_column(unique=True)
     fullname: Mapped[str]
-    created_at: Mapped[datetime] = mapped_column(auto_now_add=True)
+    created_at: Mapped[datetime]
 
 
 def db_setup():
     db_engine = create_engine("sqlite:///db.sqlite3")
-    BaseORM.metadata.create_all(engine)
-    db_session_factory = sessionmaker(bind=engine)
+    db_session_factory = sessionmaker(bind=db_engine)
+    with db_session_factory() as session:
+        BaseORM.metadata.create_all(db_engine)
+        session.commit()
     return db_engine, db_session_factory
 
 engine, session_factory = db_setup()
@@ -44,7 +46,7 @@ async def command_start_handler(message: Message) -> None:
         tg_user = message.from_user
         if session.query(User).filter(User.tg_id == tg_user.id).first():
             return
-        user = User(tg_id=tg_user.tg_id, username=tg_user.username, fullname=tg_user.fullname)
+        user = User(tg_id=tg_user.id, username=tg_user.username, fullname=tg_user.full_name, created_at=datetime.now())
         session.add(user)
         session.commit()
 
