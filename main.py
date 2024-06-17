@@ -12,14 +12,17 @@ from aiogram import Bot, Dispatcher, html
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
 
 ADMIN_PASSWORD = "12431243"
 
+
 class BaseORM(DeclarativeBase):
     __abstract__ = True
+
+
 class User(BaseORM):
     __tablename__ = 'users'
 
@@ -39,12 +42,22 @@ def db_setup():
         session.commit()
     return db_engine, db_session_factory
 
+
 engine, session_factory = db_setup()
 
 dp = Dispatcher()
 
+
 class AdminSign(StatesGroup):
     password = State()
+
+
+menu_keyboard = [
+    [KeyboardButton(text="Узнать погоду")],
+    [KeyboardButton(text="Добавить город")],
+    [KeyboardButton(text="Удалить город")],
+]
+
 
 @dp.message(AdminSign.password)
 async def handle_password(message: Message, state: FSMContext):
@@ -59,6 +72,7 @@ async def handle_password(message: Message, state: FSMContext):
         await message.answer("Неверный пароль!")
     await state.clear()
 
+
 @dp.message(Command('remove_admin'))
 async def handle_remove_admin(message: Message):
     with session_factory() as session:
@@ -69,11 +83,13 @@ async def handle_remove_admin(message: Message):
                 session.commit()
                 await message.answer("Вы больше не администратор!")
 
+
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
     await message.answer(f"Привет, {html.bold(message.from_user.full_name)}!\n"
                          f"Это бот для получения уведомлений о погоде.\n"
-                         f"Чтобы начать пользоваться ботов добавьте ваш город.")
+                         f"Чтобы начать пользоваться ботов добавьте ваш город.",
+                         reply_markup=ReplyKeyboardMarkup(keyboard=menu_keyboard))
     with session_factory() as session:
         tg_user = message.from_user
         if session.query(User).filter(User.tg_id == tg_user.id).first():
@@ -81,6 +97,8 @@ async def command_start_handler(message: Message) -> None:
         user = User(tg_id=tg_user.id, username=tg_user.username, fullname=tg_user.full_name, created_at=datetime.now())
         session.add(user)
         session.commit()
+
+
 
 @dp.message(Command('admin'))
 async def admin_handler(message: Message, state: FSMContext) -> None:
@@ -95,15 +113,11 @@ async def admin_handler(message: Message, state: FSMContext) -> None:
         await message.answer("Введите админский пароль!")
 
 
-
-
-
 async def main() -> None:
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     await dp.start_polling(bot)
 
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     asyncio.run(main())
-
-
