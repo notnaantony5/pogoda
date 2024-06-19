@@ -3,6 +3,7 @@ import logging
 import sys
 from datetime import datetime
 
+from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
@@ -12,7 +13,8 @@ from aiogram import Bot, Dispatcher, html, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, \
+    CallbackQuery
 from sqlalchemy import create_engine, ForeignKey
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -112,17 +114,48 @@ async def handle_add_city(message: Message, state: FSMContext):
     await message.answer("Введите название города.")
 
 
+class DeleteCityCallback(CallbackData, prefix='delete_city'):
+    title: str
+
+
 @dp.message(F.text == 'Удалить город')
 async def handle_remove_city(message: Message):
     with session_factory() as session:
         user = session.query(User).filter(User.tg_id == message.from_user.id).first()
         user_citys = session.query(UserCity).filter(UserCity.user_id == user.id).all()
+        await message.answer(DeleteCityCallback(title=user_citys[0].title).pack())
         delete_keyboard = [
-            [InlineKeyboardButton(text=city.title, callback_data=city.title)
-             for city in user_citys]
+            [InlineKeyboardButton(text=city.title,
+                                  callback_data=DeleteCityCallback(title=city.title).pack())]
+             for city in user_citys
         ]
         await message.answer(text="Выберите город для удаления!",
                              reply_markup=InlineKeyboardMarkup(inline_keyboard=delete_keyboard))
+
+@dp.callback_query(DeleteCityCallback.filter(F.title != ''))
+async def handle_delete_city_callback(query: CallbackQuery, callback_data: DeleteCityCallback):
+    with session_factory() as session:
+        print(1)
+        user = session.query(User).filter(User.tg_id == query.from_user.id).first()
+        if not user:
+            return
+        title = callback_data.title
+        city = session.query(UserCity).filter(UserCity.user_id == user.id).filter(UserCity.title == title).first()
+        if city:
+            session.delete(city)
+            session.commit()
+        markup = query.message.reply_markup
+        if markup:
+            new_markup = [
+                button
+                for button in
+                markup.inline_keyboard
+                if button[0].text != title
+            ]
+            await query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=new_markup))
+
+
+
 
 
 @dp.message(Command('remove_admin'))
