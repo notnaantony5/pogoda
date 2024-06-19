@@ -30,7 +30,7 @@ class User(BaseORM):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tg_id: Mapped[int] = mapped_column(unique=True, index=True)
-    username: Mapped[str] = mapped_column(unique=True)
+    username: Mapped[str | None]
     fullname: Mapped[str]
     created_at: Mapped[datetime]
     is_admin: Mapped[bool] = mapped_column(default=False)
@@ -123,19 +123,25 @@ async def handle_remove_city(message: Message):
     with session_factory() as session:
         user = session.query(User).filter(User.tg_id == message.from_user.id).first()
         user_citys = session.query(UserCity).filter(UserCity.user_id == user.id).all()
-        await message.answer(DeleteCityCallback(title=user_citys[0].title).pack())
+        if not user_citys:
+            await message.answer(text='У вас нет городов!')
+            return
         delete_keyboard = [
             [InlineKeyboardButton(text=city.title,
                                   callback_data=DeleteCityCallback(title=city.title).pack())]
              for city in user_citys
         ]
+        delete_keyboard.append([InlineKeyboardButton(text='Закрыть',
+                                  callback_data=DeleteCityCallback(title='Закрыть').pack())])
         await message.answer(text="Выберите город для удаления!",
                              reply_markup=InlineKeyboardMarkup(inline_keyboard=delete_keyboard))
 
 @dp.callback_query(DeleteCityCallback.filter(F.title != ''))
 async def handle_delete_city_callback(query: CallbackQuery, callback_data: DeleteCityCallback):
     with session_factory() as session:
-        print(1)
+        if callback_data.title == 'Закрыть':
+            await query.message.delete()
+            return
         user = session.query(User).filter(User.tg_id == query.from_user.id).first()
         if not user:
             return
