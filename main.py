@@ -140,8 +140,15 @@ async def handle_add_city(message: Message):
                     data = json.loads(await resp.text())
                     description = data['weather'][0]['description']
                     temperature = data['main']['temp']
-                    await message.answer(f"{title}:\n"
-                                         f"{description.title()}, температура - {temperature}C\n")
+                    icon_name = data['weather'][0]['icon']
+                # async with request_session.get(
+                #     f"https://openweathermap.org/img/wn/{icon_name}@4x.png"
+                # ) as resp:
+                #     with open(f"{icon_name}.png", "wb") as f:
+                #         f.write(await resp.content.read())
+                await message.answer_photo(caption=f"{title}:\n"
+                                         f"{description.title()}, температура - {temperature}C\n",
+                                     photo=f"https://openweathermap.org/img/wn/{icon_name}@4x.png")
 
 @dp.message(F.text == 'Добавить город')
 async def handle_add_city(message: Message, state: FSMContext):
