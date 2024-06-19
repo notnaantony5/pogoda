@@ -1,13 +1,15 @@
 import asyncio
+import json
 import logging
 import sys
 from datetime import datetime
 
+import aiohttp
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
-from token_tg import BOT_TOKEN
+from token_tg import BOT_TOKEN, API_KEY
 
 from aiogram import Bot, Dispatcher, html, F
 from aiogram.client.default import DefaultBotProperties
@@ -42,6 +44,8 @@ class UserCity(BaseORM):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str]
+    lon: Mapped[float]
+    lat: Mapped[float]
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     user: Mapped["User"] = relationship(back_populates='citys')
 
@@ -95,18 +99,49 @@ async def handle_add_city_title(message: Message, state: FSMContext):
         user = session.query(User).filter(User.tg_id == message.from_user.id).first()
         if not user:
             return
-        title = message.text.capitalize()
-        city = session.query(UserCity).filter(UserCity.user_id == user.id).filter(UserCity.title == title).first()
+        title = message.text
+        async with aiohttp.ClientSession() as request_session:
+            async with request_session.get(
+                    f'http://api.openweathermap.org/geo/1.0/direct?q={title}&limit=1&appid={API_KEY}&lang=ru') as resp:
+                data = json.loads(await resp.text())
+        if not data:
+            await message.answer("Город не найден!")
+            return
+        lon = data[0]['lon']
+        lat = data[0]['lat']
+        ru_title = data[0]['local_names']['ru']
+        city = session.query(UserCity).filter(UserCity.user_id == user.id).filter(UserCity.title == ru_title).first()
         if city:
             await message.answer("Этот город уже добавлен!")
             await state.clear()
             return
-        city = UserCity(user_id=user.id, title=title)
+        city = UserCity(user_id=user.id, title=ru_title, lon=lon, lat=lat)
         session.add(city)
         session.commit()
-        await message.answer(f"Город {title} добавлен!")
+        await message.answer(f"Город {ru_title} добавлен!")
         await state.clear()
 
+
+@dp.message(F.text == 'Узнать погоду')
+async def handle_add_city(message: Message):
+    with session_factory() as session:
+        user = session.query(User).filter(User.tg_id == message.from_user.id).first()
+        if not user:
+            return
+        citys = session.query(UserCity).filter(UserCity.user_id == user.id).all()
+        if not citys:
+            await message.answer("У вас нет городов!")
+        for city in citys:
+            title = city.title
+            lon, lat = city.lon, city.lat
+            async with aiohttp.ClientSession() as request_session:
+                async with request_session.get(
+                        f'https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=ru') as resp:
+                    data = json.loads(await resp.text())
+                    description = data['weather'][0]['description']
+                    temperature = data['main']['temp']
+                    await message.answer(f"{title}:\n"
+                                         f"{description.title()}, температура - {temperature}C\n")
 
 @dp.message(F.text == 'Добавить город')
 async def handle_add_city(message: Message, state: FSMContext):
