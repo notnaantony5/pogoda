@@ -1,13 +1,15 @@
 import asyncio
+import functools
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import aiohttp
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
+from celery import Celery
 
 from token_tg import BOT_TOKEN, API_KEY
 
@@ -22,6 +24,12 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column,
 
 ADMIN_PASSWORD = "12431243"
 
+def async_to_sync(func):
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        return asyncio.run(func(*args, **kwargs))
+
+    return wrapped
 
 class BaseORM(DeclarativeBase):
     __abstract__ = True
@@ -48,6 +56,7 @@ class UserCity(BaseORM):
     lat: Mapped[float]
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     user: Mapped["User"] = relationship(back_populates='citys')
+    chat_id: Mapped[int]
 
 
 def db_setup():
@@ -63,6 +72,7 @@ engine, session_factory = db_setup()
 
 dp = Dispatcher()
 
+celery = Celery('main', broker='pyamqp://guest:guest@localhost:5672/')
 
 class AdminSign(StatesGroup):
     password = State()
@@ -115,7 +125,7 @@ async def handle_add_city_title(message: Message, state: FSMContext):
             await message.answer("Этот город уже добавлен!")
             await state.clear()
             return
-        city = UserCity(user_id=user.id, title=ru_title, lon=lon, lat=lat)
+        city = UserCity(user_id=user.id, title=ru_title, lon=lon, lat=lat, chat_id=message.chat.id)
         session.add(city)
         session.commit()
         await message.answer(f"Город {ru_title} добавлен!")
@@ -123,7 +133,7 @@ async def handle_add_city_title(message: Message, state: FSMContext):
 
 
 @dp.message(F.text == 'Узнать погоду')
-async def handle_add_city(message: Message):
+async def handle_weather(message: Message):
     with session_factory() as session:
         user = session.query(User).filter(User.tg_id == message.from_user.id).first()
         if not user:
@@ -244,9 +254,41 @@ async def admin_handler(message: Message, state: FSMContext) -> None:
         await state.set_state(AdminSign.password)
         await message.answer("Введите админский пароль!")
 
+@celery.task
+@async_to_sync
+async def handle_weather_for_city(city: dict):
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    title = city['title']
+    lon, lat = city['lon'], city['lat']
+    async with aiohttp.ClientSession() as request_session:
+        async with request_session.get(
+                f'https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=ru') as resp:
+            data = json.loads(await resp.text())
+            description = data['weather'][0]['description']
+            temperature = data['main']['temp']
+            icon_name = data['weather'][0]['icon']
+    await bot.send_photo(caption=f"{title}:\n"
+                                           f"{description.title()}, температура - {temperature}C\n",
+                                   photo=f"https://openweathermap.org/img/wn/{icon_name}@4x.png", chat_id=city['chat_id'])
 
+@celery.task
+@async_to_sync
+async def handle_citys_from_database():
+    with session_factory() as session:
+        citys = session.query(UserCity).all()
+        for city in citys:
+            handle_weather_for_city.apply_async(args=[{"chat_id": city.chat_id, "lat": city.lat, "lon": city.lon, "title": city.title}])
+celery.conf.beat_schedule = {
+        'add-every-60-seconds': {
+            'task': 'main.handle_citys_from_database',
+            'schedule': 10.0,
+        },
+}
 async def main() -> None:
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    with session_factory() as session:
+        city = session.query(UserCity).first()
+        handle_weather_for_city.apply_async(args=[{"chat_id": city.chat_id, "lat": city.lat, "lon": city.lon, "title": city.title}])
     await dp.start_polling(bot)
 
 

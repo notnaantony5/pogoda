@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.10"
 aiogram = "^3.7.0"
 sqlalchemy = "^2.0.30"
+celery = "^5.4.0"
+pyamqp = "^0.1.0.7"
 
 
 [build-system]
