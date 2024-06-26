@@ -10,6 +10,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from celery import Celery
+from celery.schedules import crontab
 
 from token_tg import BOT_TOKEN, API_KEY
 
@@ -278,12 +279,13 @@ async def handle_citys_from_database():
         citys = session.query(UserCity).all()
         for city in citys:
             handle_weather_for_city.apply_async(args=[{"chat_id": city.chat_id, "lat": city.lat, "lon": city.lon, "title": city.title}])
+
 celery.conf.beat_schedule = {
-        'add-every-60-seconds': {
-            'task': 'main.handle_citys_from_database',
-            'schedule': 10.0,
-        },
-}
+    'add-every-monday-morning': {
+        'task': 'tasks.add',
+        'schedule': crontab(hour='20', minute='07', day_of_week='*'),
+        'args': (16, 16),
+}}
 async def main() -> None:
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     with session_factory() as session:
