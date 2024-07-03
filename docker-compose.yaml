@@ -1,8 +1,8 @@
-version: "2.1"
+version: "3"
 services:
   rabbitmq:
     image: rabbitmq:3.10.7-management
-    hostname: rabbitmq
+    container_name: rabbitmq
     restart: always
     environment:
       - RABBITMQ_DEFAULT_USER=guest
@@ -10,3 +10,9 @@ services:
     ports:
       - 15672:15672
       - 5672:5672
+
+  bot:
+    build: .
+    restart: always
+    volumes:
+      - ./db.sqlite3:/opt/app/db.sqlite3

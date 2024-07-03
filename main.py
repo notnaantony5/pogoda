@@ -73,7 +73,8 @@ engine, session_factory = db_setup()
 
 dp = Dispatcher()
 
-celery = Celery('main', broker='pyamqp://guest:guest@localhost:5672/')
+
+celery = Celery('main', broker='pyamqp://guest:guest@rabbitmq:5672/')
 
 class AdminSign(StatesGroup):
     password = State()
@@ -290,7 +291,8 @@ async def main() -> None:
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     with session_factory() as session:
         city = session.query(UserCity).first()
-        handle_weather_for_city.apply_async(args=[{"chat_id": city.chat_id, "lat": city.lat, "lon": city.lon, "title": city.title}])
+        if city:
+            handle_weather_for_city.apply_async(args=[{"chat_id": city.chat_id, "lat": city.lat, "lon": city.lon, "title": city.title}])
     await dp.start_polling(bot)
 
 
