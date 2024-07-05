@@ -9,6 +9,7 @@ from aiogram.types import Message
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
 
+
 DB_DIALECT = "postgresql+psycopg2"
 DB_HOST = "localhost"
 DB_PORT = 5432
@@ -16,6 +17,7 @@ DB_USER = "postgres"
 DB_PASSWORD = "postgres"
 DB_NAME = "postgres"
 BOT_TOKEN = ""
+
 
 engine = create_engine(f"{DB_DIALECT}://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
