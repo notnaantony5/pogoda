@@ -16,3 +16,13 @@ services:
     restart: always
     volumes:
       - ./db.sqlite3:/opt/app/db.sqlite3
+
+  worker:
+    build: .
+    restart: always
+    command: celery -A main.celery worker
+
+  beat:
+    build: .
+    restart: always
+    command: celery -A main.celery beat
