@@ -1,28 +1,13 @@
 version: "3"
+
 services:
-  rabbitmq:
-    image: rabbitmq:3.10.7-management
-    container_name: rabbitmq
-    restart: always
+  postgres:
+    image: postgres:15.1
+    container_name: db
     environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    restart: unless-stopped
     ports:
-      - 15672:15672
-      - 5672:5672
-
-  bot:
-    build: .
-    restart: always
-    volumes:
-      - ./db.sqlite3:/opt/app/db.sqlite3
-
-  worker:
-    build: .
-    restart: always
-    command: celery -A main.celery worker
-
-  beat:
-    build: .
-    restart: always
-    command: celery -A main.celery beat
+      - "5432:5432"

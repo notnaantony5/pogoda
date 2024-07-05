@@ -1,8 +1,0 @@
-**
-
-!main.py
-!pyproject.toml
-!poetry.lock
-!token_tg.py
-
-**/__pycache__
